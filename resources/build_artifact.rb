@@ -3,7 +3,8 @@ property :artifact_name, String, :name_attribute => true,
 property :instance, String, :required => true
 property :project_id, String, :required => true
 property :build_id, Fixnum, :required => true
-property :access_token, String, :require => true
+property :username, String, :required => true
+property :access_token, String, :required => true
 property :path, String, :required => true
 
 default_action :download
@@ -17,25 +18,32 @@ action :download do
   uri = URI(api_url)
 
   req = Net::HTTP::Get.new(uri)
-  req['Authorization'] = "Bearer #{access_token}"
+  req.basic_auth(username, access_token)
 
   res = Net::HTTP.start(uri.hostname, uri.port, :use_ssl => uri.scheme == 'https') {|http|
     http.request(req)
   }
 
-  parsed = JSON.parse(res)
+  parsed = JSON.parse(res.body)
 
-  idx = parsed['value'].find_index {|x| x == x['name'] == artifact_name}
+  idx = parsed['value'].find_index {|x| x['name'] == artifact_name}
 
   artifact = parsed['value'][idx]
   download_url = artifact['resource']['downloadUrl']
 
   artifact_filename = "#{artifact_name}-#{build_id}"
 
-  remote_file "#{path}\\#{artifact_filename}" do
-    source download_url
+  directory path do
     action :create
-    headers( "Authorization" => "Bearer #{access_token}")
+    recursive true
+  end
+
+  token = Base64.strict_encode64("#{username}:#{access_token}").strip
+
+  remote_file "#{path}\\#{artifact_filename}.zip" do
+    source download_url
+    headers({"Authorization"=>"Basic #{token}", "Accept" => "application/zip"})
+    action :create
   end
 
 end
