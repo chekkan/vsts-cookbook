@@ -5,7 +5,8 @@ property :project_id, String, :required => true
 property :build_id, Fixnum, :required => true
 property :username, String, :required => true
 property :access_token, String, :required => true
-property :path, String, :required => true
+property :destination, String, :required => true
+property :path, String, :required => false
 
 default_action :download
 
@@ -29,18 +30,24 @@ action :download do
   idx = parsed['value'].find_index {|x| x['name'] == artifact_name}
 
   artifact = parsed['value'][idx]
-  download_url = artifact['resource']['downloadUrl']
 
-  artifact_filename = "#{artifact_name}-#{build_id}"
+  if path
+    container_id = artifact['resource']['data'].split("/")[1]
+    download_url = "https://#{instance}/defaultcollection/_apis/resources/Containers/#{container_id}?itemPath=#{path}&$format=zip"
+  else
+    download_url = artifact['resource']['downloadUrl']
+  end
 
-  directory path do
+  artifact_filename = "#{artifact_name}-#{build_id}.zip"
+
+  directory destination do
     action :create
     recursive true
   end
 
   token = Base64.strict_encode64("#{username}:#{access_token}").strip
 
-  remote_file "#{path}\\#{artifact_filename}.zip" do
+  remote_file "#{destination}\\#{artifact_filename}" do
     source download_url
     headers({"Authorization"=>"Basic #{token}", "Accept" => "application/zip"})
     action :create
